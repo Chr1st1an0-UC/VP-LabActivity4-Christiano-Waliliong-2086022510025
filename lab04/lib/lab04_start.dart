@@ -258,59 +258,131 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget build(BuildContext context) {
     final visible = _visible;
     final promos = widget.items.where((item) => item.promo).toList();
-    final isTablet = MediaQuery.sizeOf(context).width > 600;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Menu')),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const StoreHeader(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Gap.md),
-            child: SearchBar(
-              key: const Key('search-field'),
-              hintText: 'Cari menu…',
-              leading: const Icon(Icons.search),
-              onChanged: (value) => setState(() => _query = value),
-            ),
-          ),
-          const SizedBox(height: Gap.sm),
-          CategoryBar(
-            selected: _category,
-            onSelected: (category) => setState(() => _category = category),
-          ),
-          PromoStrip(first: promos[0], second: promos[1]),
-          Expanded(
-            child: isTablet
-                ? GridView.count(
-                    crossAxisCount: 4,
-                    padding: const EdgeInsets.all(Gap.md),
-                    mainAxisSpacing: Gap.md,
-                    crossAxisSpacing: Gap.md,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth >= 600;
+
+            return CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (final item in visible)
-                        MenuCard(
-                          item: item,
-                          quantity: _qty[item.id] ?? 0,
-                          onAdd: () => _add(item),
+                      const StoreHeader(),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Gap.md),
+                        child: TextField(
+                          key: const Key('search-field'),
+                          decoration: const InputDecoration(
+                            hintText: 'Cari menu…',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: Gap.md,
+                              vertical: Gap.sm,
+                            ),
+                            isDense: true,
+                          ),
+                          onChanged: (value) => setState(() => _query = value),
                         ),
-                    ],
-                  )
-                : ListView(
-                    children: [
-                      for (final item in visible)
-                        MenuTile(
-                          item: item,
-                          quantity: _qty[item.id] ?? 0,
-                          onAdd: () => _add(item),
-                        ),
+                      ),
+                      const SizedBox(height: Gap.sm),
+                      CategoryBar(
+                        selected: _category,
+                        onSelected: (category) =>
+                            setState(() => _category = category),
+                      ),
+                      if (promos.length >= 2)
+                        PromoStrip(first: promos[0], second: promos[1]),
                     ],
                   ),
-          ),
-        ],
+                ),
+                if (visible.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(Gap.md),
+                        child: Column(
+                          key: const Key('empty-state'),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.search_off, size: 64),
+                            const SizedBox(height: Gap.md),
+                            Text(
+                              'Menu tidak ditemukan',
+                              style: Theme.of(context).textTheme.titleMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: Gap.sm),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _query = '';
+                                  _category = kCategories.first;
+                                });
+                              },
+                              child: const Text('Reset Filter'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else if (isTablet)
+                  SliverPadding(
+                    padding: const EdgeInsets.all(Gap.md),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        mainAxisSpacing: Gap.md,
+                        crossAxisSpacing: Gap.md,
+                        childAspectRatio: 0.65,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final item = visible[index];
+                          return MenuCard(
+                            item: item,
+                            quantity: _qty[item.id] ?? 0,
+                            onAdd: () => _add(item),
+                          );
+                        },
+                        childCount: visible.length,
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = visible[index];
+                        return MenuTile(
+                          item: item,
+                          quantity: _qty[item.id] ?? 0,
+                          onAdd: () => _add(item),
+                        );
+                      },
+                      childCount: visible.length,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
-      bottomNavigationBar: CartBar(count: _count, total: _total, onOrder: _order),
+      bottomNavigationBar: SafeArea(
+        child: CartBar(count: _count, total: _total, onOrder: _order),
+      ),
     );
   }
 }
@@ -337,20 +409,36 @@ class StoreHeader extends StatelessWidget {
             child: Icon(Icons.storefront, color: cs.onPrimaryContainer),
           ),
           const SizedBox(width: Gap.md),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(kStoreName, style: text.titleMedium),
-              Text(
-                kStoreHours,
-                style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  kStoreName,
+                  style: text.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  kStoreHours,
+                  style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: Gap.md),
-          Icon(Icons.star_rounded, size: 20, color: cs.tertiary),
           const SizedBox(width: Gap.xs),
-          Text('4.8 · 1,2 rb ulasan', style: text.labelMedium),
+          Icon(Icons.star_rounded, size: 18, color: cs.tertiary),
+          const SizedBox(width: 2),
+          Flexible(
+            child: Text(
+              '4.8 · 1,2 rb ulasan',
+              style: text.labelMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -365,7 +453,8 @@ class CategoryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: Gap.md),
       child: Row(
         children: [
@@ -391,7 +480,8 @@ class PromoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.all(Gap.md),
       child: Row(
         children: [
@@ -431,19 +521,26 @@ class PromoCard extends StatelessWidget {
                   color: cs.onTertiaryContainer,
                   letterSpacing: 1.2,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: Gap.xs),
-              Text(
-                item.name,
-                style: text.titleMedium?.copyWith(color: cs.onTertiaryContainer),
+              Expanded(
+                child: Text(
+                  item.name,
+                  style: text.titleMedium?.copyWith(color: cs.onTertiaryContainer),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
               Text(
                 rupiah(item.price),
                 style: text.titleSmall?.copyWith(
                   color: cs.onTertiaryContainer,
                   fontWeight: FontWeight.bold,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -482,16 +579,33 @@ class MenuTile extends StatelessWidget {
               child: Icon(iconFor(item.category), color: cs.onSecondaryContainer),
             ),
             const SizedBox(width: Gap.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name, style: text.titleMedium),
-                if (item.promo)
-                  Text('Promo', style: text.labelSmall?.copyWith(color: cs.primary)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: text.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (item.promo)
+                    Text(
+                      'Promo',
+                      style: text.labelSmall?.copyWith(color: cs.primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
             ),
-            const Spacer(),
-            Text(rupiah(item.price), style: text.labelLarge),
+            const SizedBox(width: Gap.md),
+            Text(
+              rupiah(item.price),
+              style: text.labelLarge,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             IconButton(
               tooltip: 'Tambah',
               onPressed: onAdd,
@@ -532,7 +646,7 @@ class MenuCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              height: 110,
+              height: 100,
               decoration: BoxDecoration(
                 color: cs.secondaryContainer,
                 borderRadius: BorderRadius.circular(12),
@@ -545,15 +659,31 @@ class MenuCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: Gap.sm),
-            Text(item.name, style: text.titleSmall),
+            Expanded(
+              child: Text(
+                item.name,
+                style: text.titleSmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(height: Gap.xs),
-            Text(rupiah(item.price), style: text.bodyMedium),
+            Text(
+              rupiah(item.price),
+              style: text.bodyMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: Gap.sm),
             SizedBox(
               width: double.infinity,
               child: FilledButton.tonal(
                 onPressed: onAdd,
-                child: Text(quantity > 0 ? 'Tambah ($quantity)' : 'Tambah'),
+                child: Text(
+                  quantity > 0 ? 'Tambah ($quantity)' : 'Tambah',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],
@@ -581,24 +711,31 @@ class CartBar extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: Gap.md),
+      padding: const EdgeInsets.symmetric(horizontal: Gap.md, vertical: Gap.sm),
       color: cs.surfaceContainerHigh,
       child: Row(
         children: [
           Icon(Icons.shopping_bag_outlined, color: cs.onSurfaceVariant),
           const SizedBox(width: Gap.sm),
-          Text(
-            'Pesanan: $count item · Total ${rupiah(total)}',
-            style: text.titleSmall,
+          Expanded(
+            child: Text(
+              'Pesanan: $count item · Total ${rupiah(total)}',
+              style: text.titleSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(width: Gap.md),
           SizedBox(
-            width: 160,
+            width: 140,
             child: FilledButton(
               key: const Key('order-button'),
               onPressed: count == 0 ? null : onOrder,
-              child: const Text('Pesan'),
+              child: const Text(
+                'Pesan',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         ],
